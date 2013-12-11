@@ -222,7 +222,7 @@ function rankingHandler(res, query)
     var size = query.size;
 
     // checks if the provided size matches the required pattern
-    if(!regular_expressions.password.test(size))
+    if(!regular_expressions.size.test(size))
         throw "Invalid parameter size";
 
     pool.getConnection(function(err, connection)
@@ -231,7 +231,7 @@ function rankingHandler(res, query)
         connection.query("SELECT name, score FROM Rankings WHERE gametype=? and boardsize=? ORDER BY score DESC LIMIT 10",
                          [query.type, query.size], function(err, rows)
         {
-            res.end( {"ranking " :  JSON.stringify(rows) } );
+            res.end(JSON.stringify( { "ranking" : rows } ));
 
             // return connection to the pool
             connection.release();
