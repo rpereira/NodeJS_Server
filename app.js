@@ -21,9 +21,9 @@ var regular_expressions =
     'password' : /./,          // requires at least one character
     'key'      : /^.{1,32}/,   // allow a sequence of 32 hexadecimal digits
     'type'     : /^/,               // -----------------------------------------------------------------------------------------------------------------------
-    'size'     : /^[1-3]/,     // allow one digit between in the range [1,3]
-    'row'      : /^[1-5]/,     // allow one digit between in the range [1,5]
-    'col'      : /^[1-5]/      // allow one digit between in the range [1,5]
+    'size'     : /^[1-3]/,     // allow one digit in the range [1,3]
+    'row'      : /^[1-5]/,     // allow one digit in the range [1,5]
+    'col'      : /^[1-5]/      // allow one digit in the range [1,5]
 };
 
 // Relational database connection' parameters
