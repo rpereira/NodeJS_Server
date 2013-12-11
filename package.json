@@ -1,0 +1,15 @@
+{
+  "name": "TW_SERVER",
+  "version": "0.0.0",
+  "description": "TW_SERVER",
+  "main": "app.js",
+  "author": {
+    "name": "Rui",
+    "email": ""
+  },
+  "dependencies": {
+    "express": "3.4.4",
+    "jade": "*",
+    "stylus": "*"
+  }
+}
