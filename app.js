@@ -1,12 +1,11 @@
 // required modules
-var http  = require('http');
-var url   = require('url');
-var mysql = require('mysql'); 
+var http   = require('http');
+var url    = require('url');
+var mysql  = require('mysql');
+var Chance = require('chance');
+var crypto = require('crypto');
 
-var port = process.env.port || 8000;
-
-// Constants
-var SERVICE_URL     = 'www.http://twserver.alunos.dcc.fc.up.pt/';
+var port = process.env.port || 8026;
 
 //  Hash table with all implemented resources
 var web_resources = 
@@ -18,8 +17,13 @@ var web_resources =
 // Associative array to validate user' info
 var regular_expressions =
 {
-    'username' : /^\w{4,14}/,     // allow only letters, numbers and '_'
-    'password' : /^\w{4,14}/      // allow only letters, numbers and '_'
+    'username' : /^\w+$/,      // allow only letters, numbers and '_'
+    'password' : /./,          // requires at least one character
+    'key'      : /^.{1,32}/,   // allow a sequence of 32 hexadecimal digits
+    'type'     : /^/,               // -----------------------------------------------------------------------------------------------------------------------
+    'size'     : /^[1-3]/,     // allow one digit between in the range [1,3]
+    'row'      : /^[1-5]/,     // allow one digit between in the range [1,5]
+    'col'      : /^[1-5]/      // allow one digit between in the range [1,5]
 };
 
 // Relational database connection' parameters
@@ -32,40 +36,52 @@ var pool = mysql.createPool(
     connectionLimit : 25            // max pool connections
 });
 
-/**
- * Handles login process.  
- *
- * @param res     The server response
- * @param query   Client's query
+/** 
+ * Server module
  */
-function login(res, query)
+var server = http.createServer(function (req, res) 
 {
-    var name = query.name;
+    // Headers
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin' : '*' });
 
-    // checks if provided username matches the required pattern
-    if(!regular_expressions.username.test(name))
-        throw "Invalid parameter name";
+    // URL components
+    var url_str    = req.url;
+    var parsed_url = url.parse(url_str, true);
+    var path_name  = parsed_url.pathname.substring(1);
+    var query      = parsed_url.query;
 
-    var pass = query.pass;
-
-    // checks if provided password matches the required pattern
-    if(!regular_expressions.password.test(pass))
-        throw "Invalid parameter pass";
-
-    //var rows = res.rows;
-
-    // fazer pesquisa
-    // ...
-
-    // Creates new user
-    /*if(res.rows == 0)
+    // Verifies if the user requested a valid url-path
+    try
     {
-        res.end(JSON.stringify( { } ));
+        validateWebResources(res, path_name, query);
     }
-    else if(res.rows != 1)
+    catch(error)
     {
-        res.end(JSON.stringify( { "error":"" } ));
-    }*/
+        res.end(JSON.stringify( { "error" : error } ));
+    }
+});
+
+/*
+ * Checks if the url-path is valid.
+ *
+ * @param res         The server response
+ * @param path_name   The path name
+ * @param query       Client's query
+ */
+function validateWebResources(res, path_name, query)
+{
+    switch(path_name)
+    {
+        case 'register':
+            register(res, path_name, query);
+            break;
+        case 'ranking':
+            ranking(res, path_name, query);
+            break;
+        default:
+            throw ("Unknown function " + path_name);
+            break;
+    }
 }
 
 /**
@@ -83,29 +99,36 @@ function register(res, path_name, query)
 
         // Valid login data
         if(validation == true)
-        {
-            login(res, query);
+        {            
+            login(query);
+            registrationHandler(res, query);
         }
     }
     catch(error)
     {
-        res.end(JSON.stringify( { "error":error } ));
+        res.end(JSON.stringify( { "error" : error } ));
     }
+}
 
-    //connection.connect();
+/**
+ * Validates the login data provided by the user.
+ *
+ * @param res     The server response
+ * @param query   Client's query
+ */
+function login(query)
+{
+    var name = query.name;
 
-    // Relational database connection
-    /*pool.getConnection(function(err, connection)
-    {
-        connection.query('SELECT * FROM Users', function(err, rows)
-        {
-            // return connection to the pool
-            connection.release();   
-        });
-    });*/
+    // checks if the provided username matches the required pattern
+    if(!regular_expressions.username.test(name))
+        throw "Invalid parameter name";
 
-    // se nao existir, insere na tabela
-    // se existir, verificar se a pass ta correcta
+    var pass = query.pass;
+
+    // checks if the provided password matches the required pattern
+    if(!regular_expressions.password.test(pass))
+        throw "Invalid parameter pass";
 }
 
 /**
@@ -120,11 +143,100 @@ function ranking(res, path_name, query)
     try
     {
         var validation = validateQuery(res, path_name, query);
+
+        if(validation == true)
+        {
+            rankingHandler(res, query);
+        }
     }
     catch(error)
     {
-        res.end(JSON.stringify( { "error":error } ));
+        res.end(JSON.stringify( { "error" : error } ));
     }
+}
+
+/**
+ * Handles registrarion process.
+ *
+ * @param path_name   The path name
+ * @param query       The parsed query
+ */
+function registrationHandler(res, query)
+{
+    pool.getConnection(function(err, connection)
+    {
+        // Prevents SQL injections
+        connection.query("SELECT name, pass, salt FROM Users WHERE name=?", [query.name], function(err, rows)
+        {
+            if(rows.length == 0)      // Create a new username
+            {
+                // Generate random string to use as salt
+                var encrypted_pass = encryptPassword(query.pass);
+
+                // Prevents SQL injections
+                connection.query('INSERT INTO Users VALUES (?,?,?)',
+                                 [query.name, encrypted_pass, random_string],
+                                 function(err, result)
+                {
+                    if(err)
+                    {
+                        connection.rollback(function() { throw err; });
+                    }
+                });
+            }
+            else
+            {
+                var salt = rows[0].salt;
+                var new_pass = decryptPassword(query.pass, salt);
+
+                if(new_pass != rows[0].pass)
+                {
+                    res.end(JSON.stringify( { "error" : "User " + query.name +
+                                              " is already registered with a different password." } ));
+                }
+                else
+                {
+                    res.end(JSON.stringify( { } ));
+                }
+            }
+
+            // return connection to the pool
+            connection.release();
+        });
+    });
+}
+
+/**
+ * Handles ranking process.
+ *
+ * @param path_name   The path name
+ */
+function rankingHandler(res, query)
+{
+    var type = query.type;
+
+    // checks if the provided type matches the required pattern
+    if(!regular_expressions.type.test(type))
+        throw "Invalid parameter type";
+
+    var size = query.size;
+
+    // checks if the provided size matches the required pattern
+    if(!regular_expressions.password.test(size))
+        throw "Invalid parameter size";
+
+    pool.getConnection(function(err, connection)
+    {
+        // Prevents SQL injections
+        connection.query("SELECT name, score FROM Rankings WHERE gametype=? and boardsize=? ORDER BY score DESC LIMIT 10",
+                         [query.type, query.size], function(err, rows)
+        {
+            res.end( {"ranking " :  JSON.stringify(rows) } );
+
+            // return connection to the pool
+            connection.release();
+        });
+    });
 }
 
 /**
@@ -142,55 +254,57 @@ function validateQuery(res, path_name, query)
     {
         if(!query.hasOwnProperty(parameters[param]))
         {
-            throw "Parameter " + parameters[param] + " absent.";
+            throw ("Parameter " + parameters[param] + " absent.");
 
             return false;
         }
     }
     
-    return true;    
+    return true;
 }
 
-/** 
- * Server module
+/**
+ * Encrypts user's password.
+ *
+ * @type   String
+ * @return pass     The encrypted string
  */
-var server = http.createServer(function (req, res) 
+function encryptPassword(pass)
 {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
+    pass = generateRandomString() + pass;
+    pass = crypto.createHash('md5').update(pass).digest('hex');
 
-    // URL components
-    var url_str    = req.url;
-    var parsed_url = url.parse(url_str, true);
-    var path_name  = parsed_url.pathname.substring(1);
-    var query      = parsed_url.query;
+    return pass;
+}
 
-    // Verifies if the user requested a valid url-path
-    try
-    {
-        validateWebResources(res, path_name, query);
-    }
-    catch(error)
-    {
-        res.end(JSON.stringify( { "error":error } ));
-    }
-    
-    res.end(req.url);
-});
-
-function validateWebResources(res, path_name, query)
+/**
+ * Decrypts user's password.
+ *
+ * @type   String
+ * @return pass     The encrypted string
+ */
+function decryptPassword(pass, salt)
 {
-    switch(path_name)
-    {
-        case 'register':
-            register(res, path_name, query);
-            break;
-        case 'ranking':
-            ranking(res, path_name, query);
-            break;
-        default:
-            throw "Unknown function " + path_name;
-            break;
-    }
+    pass = salt + pass;
+    pass = crypto.createHash('md5').update(pass).digest('hex');
+
+    return pass;
+}
+
+/**
+ * Generates a random string to use as salt.
+ * 
+ * @type   String
+ * @return random_string   The string randomly generated
+ */
+function generateRandomString()
+{
+    // Instantiate Chance so it can be used
+    chance = new Chance();
+
+    random_string = chance.string ( { length : 4 } );
+
+    return random_string;
 }
 
 server.listen(port);
