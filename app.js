@@ -159,6 +159,13 @@ function ranking(res, path_name, query)
     }
 }
 
+/**
+ * Sends the questions for each game.
+ * 
+ * @param res         The server response
+ * @param path_name   The path name
+ * @param query       The parsed query
+ */
  function questions(res, path_name, query)
  {
     try
@@ -175,8 +182,6 @@ function ranking(res, path_name, query)
         res.end(JSON.stringify( { "error" : error } ));
     }
  }
-
-
 
 /**
  * Handles registrarion process.
@@ -287,7 +292,7 @@ function questionsHandler(res, query)
         connection.query("SELECT COUNT(*) AS count FROM ??", //confirmar com Prof Prior ----------------------------------------------
                          [type], function(err, rows)
         {
-            var number_questions = rows[0].count;       // Number of rows
+            var number_questions = rows[0].count;           // Number of rows
 
             var array = new Array(size * size);
 
@@ -300,11 +305,8 @@ function questionsHandler(res, query)
                                  [type, array[i]],
                                  function(err, rows)
                 {
-                    //console.log("question : " + rows[0].question + " answer " + rows[0].answer);
                     array[i] = JSON.stringify( { 'question' : rows[0].question, 'answer' : rows[0].answer } );
                    console.log("2: " + array[i]);
-
-                    //connection.release();
                 });
             }
 
@@ -318,20 +320,42 @@ function questionsHandler(res, query)
     });
 }
 
+/**
+ * Generates an array filled with distinct random numbers.
+ *
+ * @param size                The require array size
+ * @param number_questions    The number of questions ---------------------------
+ */
 function generateRandomNumbers(size, number_questions)
 {
+    var array = [];
+
     size *= size;
 
-    var array = new Array(size);
-
-    for(var i = 0; i < size; i++)
+    while(array.length < size)
     {
         var random_number = generateRandomNumber(number_questions);
+        var found         = false;
 
-        array[i] = random_number;
+        for(var i = 0; i < size; i++)
+        {
+            if(array[i] == random_number)
+            {
+                found = true;
+                break;
+            }
+        }
+
+        if(!found)
+            array[array.length] = random_number;
     }
 }
 
+/**
+ * Generates a random number in the range [1, number_questions]
+ *
+ * @param number_questions
+ */
 function generateRandomNumber(number_questions)
 {
     return Math.floor((Math.random() * number_questions) + 1);
@@ -376,12 +400,12 @@ function encryptPassword(pass)
 }
 
 /**
- * Decrypts user's password.
+ * Compares provided password with user's password.
  *
  * @type   String
  * @return pass     The encrypted string
  */
-function decryptPassword(pass, salt)
+function comparePassword(pass, salt)
 {
     pass = salt + pass;
     pass = crypto.createHash('md5').update(pass).digest('hex');
