@@ -10,8 +10,9 @@ var port = process.env.port || 8026;
 //  Hash table with all implemented resources
 var web_resources = 
 {
-    'register' : [ 'name', 'pass' ],
-    'ranking'  : [ 'type', 'size' ]
+    'register'  : [ 'name', 'pass' ],
+    'ranking'   : [ 'type', 'size' ],
+    'questions' : [ 'type', 'size' ]
 };
 
 // Associative array to validate user' info
@@ -77,6 +78,9 @@ function validateWebResources(res, path_name, query)
             break;
         case 'ranking':
             ranking(res, path_name, query);
+            break;
+        case 'questions':
+            questions(res, path_name, query);
             break;
         default:
             throw ("Unknown function " + path_name);
@@ -155,6 +159,25 @@ function ranking(res, path_name, query)
     }
 }
 
+ function questions(res, path_name, query)
+ {
+    try
+    {
+        var validation = validateQuery(res, path_name, query);
+
+        if(validation == true)
+        {
+            questionsHandler(res, query);
+        }
+    }
+    catch(error)
+    {
+        res.end(JSON.stringify( { "error" : error } ));
+    }
+ }
+
+
+
 /**
  * Handles registrarion process.
  *
@@ -229,7 +252,7 @@ function rankingHandler(res, query)
     {
         // Prevents SQL injections
         connection.query("SELECT name, score FROM Rankings WHERE gametype=? and boardsize=? ORDER BY score DESC LIMIT 10",
-                         [query.type, query.size], function(err, rows)
+                         [type, size], function(err, rows)
         {
             res.end(JSON.stringify( { "ranking" : rows } ));
 
@@ -237,6 +260,81 @@ function rankingHandler(res, query)
             connection.release();
         });
     });
+}
+
+/**
+ * Handles ranking process.
+ *
+ * @param path_name   The path name
+ */
+function questionsHandler(res, query)
+{
+    var type = query.type;
+
+    // checks if the provided type matches the required pattern
+    if(!regular_expressions.type.test(type))
+        throw "Invalid parameter type";
+
+    var size = query.size;
+
+    // checks if the provided size matches the required pattern
+    if(!regular_expressions.size.test(size))
+        throw "Invalid parameter size";
+
+    pool.getConnection(function(err, connection)
+    {
+        // Prevents SQL injections
+        connection.query("SELECT COUNT(*) AS count FROM ??", //confirmar com Prof Prior ----------------------------------------------
+                         [type], function(err, rows)
+        {
+            var number_questions = rows[0].count;       // Number of rows
+
+            var array = new Array(size * size);
+
+            // generate random numbers
+            for(var i = 0; i < 25; i++)
+            {
+                array[i] = generateRandomNumber(number_questions);
+
+                connection.query("SELECT question, answer FROM ?? WHERE id = ?",
+                                 [type, array[i]],
+                                 function(err, rows)
+                {
+                    //console.log("question : " + rows[0].question + " answer " + rows[0].answer);
+                    array[i] = JSON.stringify( { 'question' : rows[0].question, 'answer' : rows[0].answer } );
+                   console.log("2: " + array[i]);
+
+                    //connection.release();
+                });
+            }
+
+            console.log("2: ");
+            res.end(JSON.stringify( { "questions" :  array } ));
+            console.log("3");
+
+            // return connection to the pool
+            connection.release();
+        });
+    });
+}
+
+function generateRandomNumbers(size, number_questions)
+{
+    size *= size;
+
+    var array = new Array(size);
+
+    for(var i = 0; i < size; i++)
+    {
+        var random_number = generateRandomNumber(number_questions);
+
+        array[i] = random_number;
+    }
+}
+
+function generateRandomNumber(number_questions)
+{
+    return Math.floor((Math.random() * number_questions) + 1);
 }
 
 /**
