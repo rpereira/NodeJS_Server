@@ -3,13 +3,15 @@ This Node.js program was designed to run the following web multiplayer game:
 
 
 ###Requirements
-To run this code, you'll need the following NodeJS modules:
-1. http
-2. url
-3. validator
-4. mysql
-5. chance
-6. crypto
+To run this code, you'll need (to install) the following NodeJS modules:
+```javascript
+var http   = require('http');
+var url    = require('url');
+var check  = require('validator').check;
+var mysql  = require('mysql');
+var Chance = require('chance');
+var crypto = require('crypto');
+```
 
 
 ###Web services
