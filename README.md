@@ -1,5 +1,15 @@
-###First notes
+###Before Starting
 This Node.js program was designed to run the following web multiplayer game:
+
+
+###Requirements
+To run this code, you'll need the following NodeJS modules:
+1. http
+2. url
+3. validator
+4. mysql
+5. chance
+6. crypto
 
 
 ###Web services
