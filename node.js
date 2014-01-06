@@ -1,4 +1,4 @@
-    // required modules
+// required modules
 var http   = require('http');
 var url    = require('url');
 var check  = require('validator').check;
@@ -8,7 +8,7 @@ var crypto = require('crypto');
 
 var port = process.env.port || 8026;
 
-    //  Hash table with all implemented resources
+//  Hash table with all implemented resources
 var web_resources =
 {
     'register' : ['name', 'pass'],
@@ -20,17 +20,17 @@ var web_resources =
     'update'   : ['name', 'key', 'game']
 };
 
-    // Associative array to validate user' info
+// Associative array to validate user' info
 var regular_expressions =
 {
-    'username': /^\w+$/,      // allow only letters, numbers and '_'
-    'password': /./,          // ----------- minimo 6, pelo menos 1 letra maiuscula e um digito
-    'key'     : /^.{1,32}/,   // allow a sequence of 32 hexadecimal digits
+    'username': /^\w+$/,                            // allow only letters, numbers and '_'
+    'password': /^(?=.*[A-Z])(?=.*\d)/,             // at least 1 upper letter and 1 digit
+    'key'     : /^.{1,32}/,                         // allow a sequence of 32 hexadecimal digits
     'type'    : /^(antonyms|synonyms|arithmetic|translation)/,
-    'size'    : /^[1-3]/,     // allow one digit in the range [1,3]
-    'row'     : /^[1-5]/,     // allow one digit in the range [1,5]
-    'col'     : /^[1-5]/,     // allow one digit in the range [1,5]
-    'game'    : /\d{4,}/      // allow at least 5 digits
+    'size'    : /^[1-3]/,                           // allow one digit in the range [1,3]
+    'row'     : /^[1-5]/,                           // allow one digit in the range [1,5]
+    'col'     : /^[1-5]/,                           // allow one digit in the range [1,5]
+    'game'    : /\d{4,}/                            // allow at least 5 digits
 };
 
 var waiting_games = [];     // games that are waiting for another player
@@ -38,18 +38,29 @@ var games_running = [];     // games that are running
 var data          = [];     // data to send in the Server Sent-Event    
 var clients       = [];     // response objects of each player
 var players       = [];     // players of each game
-var keys          = [];     // player's keys
 var game_id       = 1000;   // id to attribute to each game
 
 // Relational database connection' parameters
 var pool = mysql.createPool(
 {
-    host: 'localhost',
-    user: 'up201107664',
-    password: 'up201107664',
-    database: 'up201107664',
-    connectionLimit: 25            // max pool connections
+    host           : 'localhost',
+    user           : 'up201107664',
+    password       : 'olaFCUP93',
+    database       : 'up201107664',
+    connectionLimit: 25           // max pool connections
 });
+
+/**
+ * class Players' constructor
+ *
+ * @param name    The name of the player (username)
+ * @param key     The key for the game of the player  
+ */
+function Player(name, key)
+{
+    this.name = name;
+    this.key  = key;
+}
 
 /** 
  * Server module
@@ -131,7 +142,7 @@ function register(res, path_name, query)
         if (validation == true)
         {
             login(query);
-            registrationHandler(res, query);
+            _registration(res, query);
         }
     }
     catch (error)
@@ -173,7 +184,7 @@ function ranking(res, path_name, query)
 
         if (validation == true)
         {
-            rankingHandler(res, query);
+            _ranking(res, query);
         }
     }
     catch (error)
@@ -197,7 +208,7 @@ function questions(res, path_name, query)
 
         if (validation == true)
         {
-            questionsHandler(res, query);
+            _questions(res, query);
         }
     }
     catch (error)
@@ -221,7 +232,7 @@ function join(res, path_name, query)
 
         if (validation == true)
         {
-            joinHandler(res, query);
+            _join(res, query);
         }
     }
     catch (error)
@@ -245,7 +256,7 @@ function leave(res, path_name, query)
 
         if (validation == true)
         {
-            leaveHandler(res, query);
+            _leave(res, query);
         }
     }
     catch (error)
@@ -270,7 +281,7 @@ function notify(res, path_name, query)
 
         if (validation == true)
         {
-            notifyHandler(res, query);
+            _notify(res, query);
         }
     }
     catch (error)
@@ -294,7 +305,7 @@ function update(res, path_name, query)
 
         if (validation == true)
         {
-            updateHandler(res, query);
+            _update(res, query);
         }
     }
     catch (error)
@@ -309,7 +320,7 @@ function update(res, path_name, query)
  * @param path_name   The path name
  * @param query       The parsed query
  */
-function registrationHandler(res, query)
+function _registration(res, query)
 {
     pool.getConnection(function (err, connection)
     {
@@ -341,8 +352,7 @@ function registrationHandler(res, query)
 
                                  if (new_pass != rows[0].pass)
                                  {
-                                     res.end(JSON.stringify({
-                                         "error": "User " + query.name +
+                                     res.end(JSON.stringify({"error": "User " + query.name +
                                          " is already registered with a different password."
                                      }));
                                  }
@@ -362,7 +372,7 @@ function registrationHandler(res, query)
  * @param path_name   The path name
  * @param query       The parsed query
  */
-function rankingHandler(res, query)
+function _ranking(res, query)
 {
     var type = query.type;
     var size = query.size;
@@ -390,14 +400,14 @@ function rankingHandler(res, query)
  * @param path_name   The path name
  * @param query       The parsed query
  */
-function questionsHandler(res, query, gameMode)
+function _questions(res, query)
 {
     var type = query.type;
-    var first_letter = type.charAt(0).toUpperCase();
     var size = query.size;
 
     validateParams(query);
 
+    var first_letter = type.charAt(0).toUpperCase(); 
     type = type.substring(1, type.length);
     type = first_letter + type;
 
@@ -411,17 +421,13 @@ function questionsHandler(res, query, gameMode)
     {
         pool.getConnection(function (err, connection)
         {
-            var letter = type.charAt(0).toUpperCase();
-
-            type = letter + type.substring(1);
-
             // Prevents SQL injections
             connection.query("SELECT COUNT(*) AS count FROM ??",
                              [type],
                              function (err, rows)
                              {
                                  var number_questions = rows[0].count;    // Number of rows
-                                 var ids = generateRandomNumbers(parseInt(size) + 2, number_questions);
+                                 var ids = generateRandomIds(parseInt(size) + 2, number_questions);
 
                                  connection.query("SELECT question, answer FROM ?? WHERE id  IN " + ids,
                                                    [type],
@@ -446,8 +452,8 @@ function getMultiplayerQuestions(game)
 {
     var type = games_running[game].type;
     var size = parseInt(games_running[game].size);
+   
     var letter = type.charAt(0).toUpperCase();
-
     type = letter + type.substring(1);
 
     sendSSE(game); // sends scores
@@ -470,7 +476,7 @@ function getMultiplayerQuestions(game)
                              function (err, rows)
                              {
                                  var number_questions = rows[0].count;    // Number of rows
-                                 var ids = generateRandomNumbers(parseInt(size) + 2, number_questions);
+                                 var ids = generateRandomIds(parseInt(size) + 2, number_questions);
 
                                  connection.query("SELECT question, answer FROM ?? WHERE id  IN " + ids,
                                                    [type], 
@@ -494,7 +500,7 @@ function getMultiplayerQuestions(game)
  * @param path_name   The path name
  * @param query       The parsed query
  */
-function joinHandler(res, query)
+function _join(res, query)
 {
     var name = query.name;
     var pass = query.pass;
@@ -512,19 +518,7 @@ function joinHandler(res, query)
                          [query.name],
                          function (err, rows)
                          {
-                             if (rows.length == 0)
-                                 res.end(JSON.stringify({ 'error': "Authentication error" }));
-                             else
-                             {
-                                 var salt = rows[0].salt;
-                                 var new_pass = comparePassword(query.pass, salt);
-
-                                 if (new_pass != rows[0].pass)
-                                 {
-                                     res.end(JSON.stringify({ 'error': "Authentication error" }));
-                                     error = true;
-                                 }
-                             }
+                             error = authentication(res, rows, query);    // verifies the authentication of the player                        
 
                              if (!error)    // authentication succeded
                              {
@@ -532,17 +526,18 @@ function joinHandler(res, query)
 
                                  for (var i = 0; i < waiting_games.length; i++)
                                  {
-                                     if (waiting_games[i].type === type && waiting_games[i].size === size)
+                                     if (waiting_games[i].type === type && waiting_games[i].size === size) //exists a game in wait for the type and size specified
                                      {
                                          found      = true;
                                          game       = waiting_games[i].game;
                                          key        = generateKey();
-                                         keys[name] = key;
-                                         createNewGame(i, size, name, type, key, res);
+                                         
+                                         var player = new Player(name, key);
 
-                                         res.end(JSON.stringify({ 'game': waiting_games[i].game, 'key': key }));
-                                         firstUpdate(game);
-                                         players[game] = { '1': waiting_games[i].first_player, '2': name };
+                                         createNewGame(i, size, player, type, res);
+
+                                         res.end(JSON.stringify({ 'game': game, 'key': key }));
+                                        
                                          waiting_games = resetGamesArrays(i, waiting_games);
                                      }
                                  }
@@ -550,23 +545,11 @@ function joinHandler(res, query)
                                  if (!found)    // wait for another player
                                  {
                                      key        = generateKey();
-                                     keys[name] = key;
-                                     waiting_games[waiting_games.length] =
-                                     {
-                                         'type'        : type,
-                                         'size'        : size,
-                                         'game'        : game_id,
-                                         'key'         : key,
-                                         'first_player': name
-                                     };
+                                     var player = new Player(name, key);
 
-                                     var scores = new Object();
-                                     scores[name] = 0;
-                                     data[game_id] = { 'scores': scores };      //update
+                                     createNewWaitingGame(player,type,size);
 
                                      res.end(JSON.stringify({ 'game': game_id, 'key': key }));
-
-                                     firstUpdate(game_id);
                                      game_id++;
                                  }
                              }
@@ -577,13 +560,115 @@ function joinHandler(res, query)
     });
 }
 
+   /**
+    * Verifies if the name and data of the player corresponds with the registration data
+    *
+    * @param res        The server object response
+    * @param rows       Rows read from the database
+    * @param query      Query given by the client
+    * @return error     Authentication valid or invalid
+    */
+function authentication(res, rows, query)
+{
+    if (rows.length == 0)
+    {
+          res.end(JSON.stringify({ 'error': "Authentication error" }));
+          return true;
+    }
+    else
+    {
+        var salt = rows[0].salt;
+        var new_pass = comparePassword(query.pass, salt);
+
+        if (new_pass != rows[0].pass)
+        {
+            res.end(JSON.stringify({ 'error': "Authentication error" }));
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+   /**
+    *   Creates a new game in waiting state
+    *
+    * @param player         player waiting for an oponnet
+    * @param type           type of the game
+    * @param size          size of the game
+    */
+function createNewWaitingGame(player, type, size)
+{
+    var game_players = new Object();
+    var scores       = new Object();
+    
+    game_players = [player];
+    players[game_id] = game_players;
+
+    waiting_games[waiting_games.length] =
+    {
+        'type'        : type,
+        'size'        : size,
+        'game'        : game_id,
+        'first_player': player
+    };
+        
+    scores[player.name] = 0;
+    data[game_id] = { 'scores': scores };      //update
+}
+
+   /**
+    * Creates a new game
+    * 
+    * @param i      position of the game in the array of waiting games
+    * @param size   size of the table
+    * @param name   name of the last player to join the game
+    * @param type   type of game
+    */
+function createNewGame(i, size, player, type, res)
+{
+    var timestamp    = new Object();
+    var scores       = new Object();
+    var game_players = new Object();
+    var time         = Date.now();
+
+    user = waiting_games[i].first_player;
+    game = waiting_games[i].game;
+
+    number_cells = (parseInt(size) + 2) * (parseInt(size) + 2);
+
+    table = generateGame(parseInt(size) + 2); //creates a table that include all the cells of the game
+
+    scores[user.name]   = 0;
+    scores[player.name] = 0;
+
+    data[game] = { 'scores': scores }; //update
+
+    timestamp[player.name] = time;  //timestamp of each player
+    timestamp[user.name]   = time;
+
+    game_players  = [user,player];
+    players[game] = game_players;
+
+    games_running[game] =
+    {
+        'scores': scores,
+        'cells': table,
+        'number_cells': number_cells,
+        'gameInstant': timestamp,
+        'type': type,
+        'size': size,
+    };
+}
+
 /**
  * Handles leave process.
  *
  * @param path_name   The path name
  * @param query       The parsed query
  */
-function leaveHandler(res, query)
+function _leave(res, query)
 {
     var name = query.name;
     var key  = query.key;
@@ -591,14 +676,24 @@ function leaveHandler(res, query)
 
     validateParams(query);
 
-    if (!waiting_games.hasOwnProperty(game))
+    var found = false;
+
+    //verifies if the game hasn't started yet
+    for (var i = 0 ; i < waiting_games.length; i++)
+    { 
+        if(waiting_games[i].game == game)
+            found = true;
+    }
+        
+    if (!found)
         res.end(JSON.stringify({ 'error': " Can't leave when game is in ready state" }));
     else
     {
         for (var i = 0; i < waiting_games.length; i++)
         {
-            if (waiting_games[i].key[name] == key && waiting_games[i].game == game &&
-                waiting_games[i].first_player == name)
+            var player = waiting_games[i].first_player;
+
+            if (player.key == key && player.name == name && waiting_games[i].game == game)
             {
                 waiting_games = resetGamesArrays(i, waiting_games);
 
@@ -606,6 +701,7 @@ function leaveHandler(res, query)
             }
         }
     }
+    
 }
 
 /**
@@ -614,8 +710,9 @@ function leaveHandler(res, query)
  * @param path_name   The path name
  * @param query       The parsed query
  */
-function notifyHandler(res, query)
+function _notify(res, query)
 {
+   
     var name = query.name
     var key  = query.key
     var game = query.game
@@ -629,49 +726,60 @@ function notifyHandler(res, query)
 
     row = parseInt(row) - 1;
     col = parseInt(col) - 1;
+    
+    var game_players = players[game];
 
-    if (keys[name] != key)
-        res.end(JSON.stringify({ 'error': 'Identificador de jogo inexistente' }));
-    else
+    for (var i = 0; i < game_players.length; i++)
     {
-        if (table_game[row][col] == 1)
-        {
-            cells--; //decrement the number of cells that hasn't been answered yet
-            games_running[game].number_cells = cells;
+        var player = game_players[i];
 
-            table_game[row][col] = 0; //sets the cell in position (row,cell) as invalid
-            games_running[game].cells = table_game;
+        if(player.name === name)
+        {           
+            if (player.key != key)
+                    res.end(JSON.stringify({ 'error': 'Identificador de jogo inexistente' }));
+            else
+            {
+                if (table_game[row][col] == 1) //cell hasn't been removed yet
+                {
+                    cells--; //decrement the number of cells that hasn't been answered yet
+                    games_running[game].number_cells = cells;
 
-            setPoints(name, game); //updates player's points
+                    table_game[row][col] = 0; //sets the cell in position (row,cell) as removed
+                    games_running[game].cells = table_game;
 
-            data[game] = {
-                'move': {
-                    'name': name, 
-                    'row': (row + 1),
-                    'col': (col + 1)
-                }, 'scores': games_running[game].scores
-            };  //update data for server sent-event
-            sendSSE(game); //update
-            res.end(JSON.stringify({}));
-        }
-        else
-            res.end(JSON.stringify({ 'error': ("Ladrilho " + (row + 1) + "," + (col + 1) + " já removido") }));
+                    setPoints(name, game); //updates player's points
 
-        if (cells == 0) //report winner and update ranking
-        {
-            winner = findWinner(name, game);
-            data[game] = {
-                'move': {
-                    'name': name, 
-                    'row': (row + 1),
-                    'col': (col + 1)
-                }, 
-                'scores': games_running[game].scores, 
-                'winner': winner
-            };
+                    data[game] = {
+                        'move': {
+                            'name': name, 
+                            'row': (row + 1),
+                            'col': (col + 1)
+                        }, 'scores': games_running[game].scores
+                    };  //update data for server sent-event
 
-            sendSSE(game);  //update
-            updateRanking(game, winner);
+                    sendSSE(game); //update
+                    res.end(JSON.stringify({}));
+                }
+                else
+                    res.end(JSON.stringify({ 'error': ("Ladrilho " + (row + 1) + "," + (col + 1) + " já removido") }));
+
+                if (cells == 0) //report winner and update ranking
+                {
+                    winner = findWinner(name, game);
+                    data[game] = {
+                        'move': {
+                            'name': name, 
+                            'row': (row + 1),
+                            'col': (col + 1)
+                        }, 
+                        'scores': games_running[game].scores, 
+                        'winner': winner
+                    };
+
+                    sendSSE(game);  //update
+                    updateRanking(game, winner); //adds winner to the ranking
+                }
+            }
         }
     }
 }
@@ -715,26 +823,37 @@ function updateRanking(game, winner)
  * @param path_name   The path name
  * @param query       The parsed query
  */
-function updateHandler(res, query)
+function _update(res, query)
 {
     var name = query.name;
     var key  = query.key
     var game = query.game;
 
-    if (keys[name] != key)
-        res.end(JSON.stringify({ 'error': 'Identificador de jogo inexistente' }));
-    else
-    {
-        res.writeHead(200, {
-            'Content-Type': 'text/event-stream; charset=utf-8',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'Access-Control-Allow-Origin': '*'
-        });
+    var game_players = players[game];
+      
+     for(var i = 0; i < game_players.length; i++){
 
-        clients[name] = res;
-        firstUpdate(game);
-    }
+        var player = game_players[i];
+        if(player.name == name){
+
+            if (player.key!= key){
+
+                res.end(JSON.stringify({ 'error': 'Identificador de jogo inexistente' }));
+                }
+            else
+            {
+                res.writeHead(200, {
+                    'Content-Type': 'text/event-stream; charset=utf-8',
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive',
+                    'Access-Control-Allow-Origin': '*'
+                });
+
+                clients[name] = res;
+                firstUpdate(game);
+            }
+        }
+   }
 }
 
 /**
@@ -753,7 +872,7 @@ function firstUpdate(game)
             if (clients.hasOwnProperty(player))
                 players++;
 
-        // if both players are aready, send questions and start countdown   
+        // if both players are ready, send questions and start countdown   
         if (players == 2)
             getMultiplayerQuestions(game);
         else
@@ -769,19 +888,20 @@ function firstUpdate(game)
 function sendSSE(game)
 {
     var game_players = players[game];
-
-    for (i in game_players)
+    
+    for (var i = 0; i < game_players.length; i++)
     {
-        if (clients.hasOwnProperty(game_players[i])) //checks if the player already made an update request
+       var player = game_players[i];
+
+        if (clients.hasOwnProperty(player.name))     //checks if the player already made an update request
         {
-            res = clients[game_players[i]];
+            res = clients[player.name];
             res.write("data: " + JSON.stringify(data[game]) + "\n\n");
 
             if (data[game].hasOwnProperty('winner')) // deletes the response objects of the players and ends server sent-event
             {
-                delete (clients[game_players[i]]);
-                delete (keys[game_players[i]]);
-
+                delete (clients[player.name]);
+                delete(players[game]);
                 res.end();
             }
         }
@@ -795,20 +915,16 @@ function sendSSE(game)
  */
 function startCountdown(game)
 {
-    time = 6;
-    time--; //update --------------------------------
+    time = 5;
     countdownInterval = setInterval(function ()
     {
+        data[game] = { 'countdown': time };
+        sendSSE(game);
+        
         if (time < 1)
         {
-            data[game] = { 'countdown': time };
-            sendSSE(game);
             clearInterval(countdownInterval);
-        } else
-        {
-            data[game] = { 'countdown': time };
-            sendSSE(game);
-        }
+        } 
         time--;
     }, 1000);
 }
@@ -821,9 +937,9 @@ function startCountdown(game)
  */
 function findWinner(name, game)
 {
-    var winner = name;
-    var max_points = games_running[game].scores[name];
-    var scores = games_running[game].scores;
+    var winner     = name;
+    var max_points = games_running[game].scores[name]; //score of the player who made the last move
+    var scores     = games_running[game].scores;      //scores of all players
 
     for (player in scores)
     {
@@ -832,12 +948,12 @@ function findWinner(name, game)
             if (player != name)
             {
                 if (scores[player] == max_points || scores[player] > max_points)
-                    return player;
+                    return player;    // the winner is the oponnent of the player who made the last move
             }
         }
     }
 
-    return winner;
+    return winner; //the winner is the player who made the last move
 }
 
 /**
@@ -867,47 +983,6 @@ function generateGame(size)
 }
     
 /**
- * Creates a new game
- * 
- * @param i      position of the game in the array of waiting games
- * @param size   size of the table
- * @param name   name of the last player to join the game
- * @param type   type of game
- */
-function createNewGame(i, size, name, type, key, res)
-{
-    var timestamp = new Object();
-    var scores    = new Object();
-    var time      = Date.now();
-
-    user = waiting_games[i].first_player;
-    game = waiting_games[i].game;
-
-    number_cells = (parseInt(size) + 2) * (parseInt(size) + 2);
-
-    table = generateGame(parseInt(size) + 2);
-
-    scores[user] = 0;
-    scores[name] = 0;
-
-    data[game] = { 'scores': scores }; //update
-
-    timestamp[name] = time;
-    timestamp[user] = time;
-
-    games_running[game] =
-    {
-        'scores': scores,
-        'cells': table,
-        'number_cells': number_cells,
-        'gameInstant': timestamp,
-        'type': type,
-        'size': size,
-        'gameStart': false
-    };
-}
-
-/**
  * Removes the element from the Array
  * 
  * @param pos position to remove  
@@ -927,7 +1002,7 @@ function resetGamesArrays(pos, array)
  * @param number_questions    The number of questions 
  * @return string             string with questions' ids  
  */
-function generateRandomNumbers(size, number_questions)
+function generateRandomIds(size, number_questions)
 {
     var array = [];
     var string = "(";
@@ -972,34 +1047,35 @@ function generateRandomNumbers(size, number_questions)
 function generateArithmeticQuestions(size)
 {
     var number_cells = size * size;
-    var results      = [];
+    var answers      = [];
     var questions    = [];
 
-    while (results.length < number_cells)
+    while (answers.length < number_cells)
     {
         var x  = generateRandomNumber(10);
         var y  = generateRandomNumber(10);
         var op = generateOp();        
         var answer;
+        var question;
 
-        if (op === '-')
+        if (op === '-') 
         {
-            answer = x + y;
-            result = answer + " - " + y;
+            answer   = x + y;
+            question = answer + " - " + y; 
         } else if (op === '/')
         {
-            answer = x * y;
-            result = answer + " / " + y;
-        } else      // + or *
-            result = x + " " + op + " " + y;
+            answer   = x * y;
+            question = answer + " / " + y;
+        } else       // + or *
+            question = x + " " + op + " " + y;
 
         answer = calculateResult(x, op, y);
         
         var found = false;
 
-        for (var i = 0; i < results.length; i++)
+        for (var i = 0; i < answers.length; i++)
         {
-            if (results[i] == answer)
+            if (answers[i] == answer)
             {
                 found = true;
                 break;
@@ -1008,8 +1084,8 @@ function generateArithmeticQuestions(size)
 
         if (!found)
         {
-            results[results.length] = answer;
-            questions[questions.length] = { 'question': result, 'answer': answer.toString() };
+            answers[answers.length] = answer;
+            questions[questions.length] = { 'question': question, 'answer': answer.toString() };
         }
     }
 
@@ -1024,11 +1100,18 @@ function generateArithmeticQuestions(size)
 function generateOp()
 {
     var ops = ['+', '-', '*', '/'];
-    var op = ops[Math.floor(Math.random() * ops.length)];
+    var op  = ops[Math.floor(Math.random() * ops.length)];
 
     return op;
 }
 
+/**
+* Calculate the result of thte arithmetic operation
+* 
+* @param num1      First number
+* @param op        Arithmetic operation
+* @param num2      Second number
+*/
 function calculateResult(num1, op, num2)
 {
     if (op === '+')
@@ -1049,9 +1132,9 @@ function calculateResult(num1, op, num2)
     }
 }
 
-function generateRandomNumber(number_questions)
+function generateRandomNumber(limit)
 {
-    return Math.floor((Math.random() * number_questions) + 1);
+    return Math.floor((Math.random() * limit) + 1);
 }
 
 /**
@@ -1181,7 +1264,7 @@ function generateRandomString()
  */
 function generateKey()
 {
-    key = "" + Math.floor((Math.random() * 10000) + 1); // ?????????????????????????????????????
+    key = "" + Math.floor((Math.random() * 10000) + 1); 
     key = crypto.createHash('md5').update(key).digest('hex');
 
     return key;
@@ -1195,10 +1278,10 @@ function generateKey()
  */
 function setPoints(player, game)
 {
-    var timeInstant = games_running[game].gameInstant[player];
-    var timeNow = Date.now();
+    var timeInstant   = games_running[game].gameInstant[player];
+    var timeNow       = Date.now();
     var timeVariation = Math.floor(timeNow - timeInstant);
-    var time = timeVariation / 10000;
+    var time          = timeVariation / 10000;
 
     games_running[game].scores[player] += Math.floor(1000 * Math.exp(-time));
 
